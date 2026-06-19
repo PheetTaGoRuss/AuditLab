@@ -1,12 +1,18 @@
 """
 AuditLab Backend — paste this entire cell into Kaggle after Typhoon2 8B is loaded.
-Requires: pip install fastapi uvicorn pyngrok sse-starlette transformers torch
+Requires: pip install fastapi uvicorn sse-starlette transformers torch
+
+Tunnel: uses cloudflared (no account needed).
+Install once in a prior cell:
+  !wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+       -O /usr/local/bin/cloudflared && chmod +x /usr/local/bin/cloudflared
 """
 
 import asyncio
 import json
 import math
 import re
+import subprocess
 import threading
 import time
 from itertools import combinations
@@ -16,7 +22,6 @@ import torch
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pyngrok import ngrok
 from sse_starlette.sse import EventSourceResponse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -280,20 +285,36 @@ async def audit_stream(request: Request):
     return EventSourceResponse(generator())
 
 
-# ── Start server + ngrok ───────────────────────────────────────────────────────
+# ── Start server + cloudflared tunnel ─────────────────────────────────────────
+
+def start_tunnel():
+    """Launch cloudflared and print the public URL (no account required)."""
+    proc = subprocess.Popen(
+        ["cloudflared", "tunnel", "--url", "http://localhost:8000"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    url_pattern = re.compile(r"https://[a-z0-9\-]+\.trycloudflare\.com")
+    for line in proc.stdout:
+        match = url_pattern.search(line)
+        if match:
+            public_url = match.group(0)
+            print(f"\n{'='*60}")
+            print(f"  PUBLIC URL: {public_url}")
+            print(f"  Copy this URL into the AuditLab frontend (⚙️ button)")
+            print(f"{'='*60}\n")
+            break
+
 
 def start():
-    # Set your ngrok auth token if not already configured:
-    # ngrok.set_auth_token("YOUR_NGROK_TOKEN")
-    public_url = ngrok.connect(8000)
-    print(f"\n{'='*60}")
-    print(f"  PUBLIC URL: {public_url}")
-    print(f"  Copy this URL into the AuditLab frontend")
-    print(f"{'='*60}\n")
+    # Start tunnel in background thread so it prints URL while uvicorn starts
+    tunnel_thread = threading.Thread(target=start_tunnel, daemon=True)
+    tunnel_thread.start()
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
 
 
 thread = threading.Thread(target=start, daemon=True)
 thread.start()
-time.sleep(3)
-print("Backend is running. Use the PUBLIC URL above in the frontend.")
+time.sleep(5)
+print("Backend is running. Copy the PUBLIC URL above into the AuditLab frontend.")
