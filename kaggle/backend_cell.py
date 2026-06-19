@@ -108,6 +108,8 @@ def call_llm(system_prompt: str, user_text: str, max_new_tokens: int = 1024) -> 
         {"role": "user",   "content": user_text[:4000]},  # safety truncation
     ]
     ids = tokenizer.apply_chat_template(messages, return_tensors="pt", add_generation_prompt=True)
+    if not isinstance(ids, torch.Tensor):
+        ids = ids["input_ids"]
     ids = ids.to(DEVICE)
     with torch.no_grad():
         out = model.generate(ids, max_new_tokens=max_new_tokens, do_sample=False)
