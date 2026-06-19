@@ -37,8 +37,9 @@ if isinstance(_g.get("tokenizer"), AutoTokenizer) and _g.get("model") is not Non
 else:
     print(f"Loading {MODEL_ID} on {DEVICE} ...")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID, torch_dtype=torch.float16, device_map="auto"
+        MODEL_ID, dtype=torch.float16, device_map="auto"
     )
     print("Model loaded.")
 
@@ -111,8 +112,15 @@ def call_llm(system_prompt: str, user_text: str, max_new_tokens: int = 1024) -> 
     if not isinstance(ids, torch.Tensor):
         ids = ids["input_ids"]
     ids = ids.to(DEVICE)
+    mask = torch.ones_like(ids)
     with torch.no_grad():
-        out = model.generate(ids, max_new_tokens=max_new_tokens, do_sample=False)
+        out = model.generate(
+            ids,
+            attention_mask=mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            pad_token_id=tokenizer.eos_token_id,
+        )
     decoded = tokenizer.decode(out[0][ids.shape[-1]:], skip_special_tokens=True)
     return decoded.strip()
 
