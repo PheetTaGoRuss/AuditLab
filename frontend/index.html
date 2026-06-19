@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AuditLab — AI Scientific Audit</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <span class="logo">🔬 AuditLab</span>
+      <span class="tagline">AI Scientific Audit System · Typhoon2 8B</span>
+      <button id="settingsBtn" class="icon-btn" title="API Settings">⚙️</button>
+    </div>
+  </header>
+
+  <!-- Settings modal -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-box">
+      <h3>API Settings</h3>
+      <label>Kaggle ngrok URL</label>
+      <input id="apiUrlInput" type="url" placeholder="https://xxxx.ngrok-free.app" />
+      <div class="modal-actions">
+        <button id="saveApiUrl" class="btn-primary">Save</button>
+        <button id="cancelSettings" class="btn-ghost">Cancel</button>
+      </div>
+      <p class="hint">Paste the ngrok URL printed by the Kaggle backend cell. Update after every Kaggle restart.</p>
+    </div>
+  </div>
+
+  <main>
+    <!-- Input section -->
+    <section class="input-section card">
+      <div class="tabs">
+        <button class="tab active" data-tab="text">Paste Text</button>
+        <button class="tab" data-tab="file">Upload File</button>
+      </div>
+
+      <div id="tab-text" class="tab-panel active">
+        <textarea id="articleText" placeholder="Paste your scientific article or abstract here…" rows="10"></textarea>
+      </div>
+      <div id="tab-file" class="tab-panel">
+        <div class="drop-zone" id="dropZone">
+          <span>Drag & drop a .txt file here, or</span>
+          <label class="btn-ghost file-label">
+            Browse
+            <input type="file" id="fileInput" accept=".txt,.md" hidden />
+          </label>
+        </div>
+        <p id="fileName" class="hint"></p>
+      </div>
+
+      <div class="input-footer">
+        <span id="charCount" class="hint">0 characters</span>
+        <button id="auditBtn" class="btn-primary">▶ Run Audit</button>
+      </div>
+    </section>
+
+    <!-- Progress section -->
+    <section id="progressSection" class="card hidden">
+      <h2>Running Agents</h2>
+      <div id="agentRows"></div>
+    </section>
+
+    <!-- Results section -->
+    <section id="resultsSection" class="card hidden">
+      <div class="score-banner" id="scoreBanner">
+        <div class="score-value" id="scoreValue">—</div>
+        <div class="score-meta">
+          <span id="scoreTier" class="tier-badge">—</span>
+          <span id="scoreDetail" class="hint"></span>
+        </div>
+      </div>
+
+      <div class="result-tabs">
+        <button class="rtab active" data-rtab="agents">Agents</button>
+        <button class="rtab" data-rtab="shapley">Shapley</button>
+        <button class="rtab" data-rtab="debate">Debate</button>
+        <button class="rtab" data-rtab="peer">Peer Prediction</button>
+      </div>
+
+      <div id="rtab-agents"  class="rtab-panel active" ></div>
+      <div id="rtab-shapley" class="rtab-panel hidden"></div>
+      <div id="rtab-debate"  class="rtab-panel hidden"></div>
+      <div id="rtab-peer"    class="rtab-panel hidden"></div>
+
+      <div class="export-row">
+        <button id="exportJson" class="btn-ghost">⬇ Export JSON</button>
+        <button id="exportTxt"  class="btn-ghost">⬇ Export TXT</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
