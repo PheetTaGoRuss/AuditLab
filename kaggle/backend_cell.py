@@ -25,13 +25,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# ── Model (assumes already loaded in a prior cell as `model` and `tokenizer`) ──
-# If running standalone, uncomment:
-# MODEL_ID = "scb10x/llama3.1-typhoon2-8b-instruct"
-# tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-# model = AutoModelForCausalLM.from_pretrained(MODEL_ID, torch_dtype=torch.float16, device_map="auto")
-
+# ── Model loading ──────────────────────────────────────────────────────────────
+# Uses `model` / `tokenizer` from a prior cell if they exist, otherwise loads.
+MODEL_ID = "scb10x/llama3.1-typhoon2-8b-instruct"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+try:
+    tokenizer  # noqa: F821
+    model      # noqa: F821
+    print("Using model already loaded in memory.")
+except NameError:
+    print(f"Loading {MODEL_ID} on {DEVICE} ...")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_ID, torch_dtype=torch.float16, device_map="auto"
+    )
+    print("Model loaded.")
 
 # ── Agent configuration ────────────────────────────────────────────────────────
 
