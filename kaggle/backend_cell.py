@@ -59,54 +59,48 @@ AGENT_PROMPTS = {
         "You are a Logic Auditor. Analyse the logical structure of the scientific text below. "
         "Identify any logical fallacies, unsupported inferences, or circular reasoning. "
         "For each issue found, quote the exact sentence, explain the problem, and suggest a correction. "
-        "Rate overall logical quality 0-10. Respond in JSON:\n"
-        '{"score": <0-10>, "issues": [{"severity": "LOW|MEDIUM|HIGH|CRITICAL", '
-        '"sentence": "...", "problem": "...", "correction": "..."}]}'
+        "Rate overall logical quality 0-10. List at most 3 issues. Respond ONLY in compact JSON (no extra text):\n"
+        '{"score":<0-10>,"issues":[{"severity":"LOW|MEDIUM|HIGH|CRITICAL","sentence":"...","problem":"...","correction":"..."}]}'
     ),
     "citation": (
         "You are a Citation Auditor. Review the citation practices in the text below. "
         "Flag missing citations for key claims, suspicious references, or over-reliance on a single source. "
-        "Rate citation quality 0-10. Respond in JSON:\n"
-        '{"score": <0-10>, "issues": [{"severity": "LOW|MEDIUM|HIGH|CRITICAL", '
-        '"sentence": "...", "problem": "...", "correction": "..."}]}'
+        "Rate citation quality 0-10. List at most 3 issues. Respond ONLY in compact JSON (no extra text):\n"
+        '{"score":<0-10>,"issues":[{"severity":"LOW|MEDIUM|HIGH|CRITICAL","sentence":"...","problem":"...","correction":"..."}]}'
     ),
     "statistics": (
         "You are a Statistics Auditor. Examine all statistical claims, p-values, effect sizes, "
         "confidence intervals, and methodology. Flag misuse of statistics, underpowered studies, "
-        "or misleading figures. Rate statistical rigor 0-10. Respond in JSON:\n"
-        '{"score": <0-10>, "issues": [{"severity": "LOW|MEDIUM|HIGH|CRITICAL", '
-        '"sentence": "...", "problem": "...", "correction": "..."}]}'
+        "or misleading figures. Rate statistical rigor 0-10. List at most 3 issues. Respond ONLY in compact JSON (no extra text):\n"
+        '{"score":<0-10>,"issues":[{"severity":"LOW|MEDIUM|HIGH|CRITICAL","sentence":"...","problem":"...","correction":"..."}]}'
     ),
     "retrieval": (
         "You are a Knowledge Retrieval Auditor. Assess how well the text situates itself in existing "
         "literature. Identify missing foundational references, outdated citations, or contradictions "
-        "with established findings. Rate retrieval quality 0-10. Respond in JSON:\n"
-        '{"score": <0-10>, "issues": [{"severity": "LOW|MEDIUM|HIGH|CRITICAL", '
-        '"sentence": "...", "problem": "...", "correction": "..."}]}'
+        "with established findings. Rate retrieval quality 0-10. List at most 3 issues. Respond ONLY in compact JSON (no extra text):\n"
+        '{"score":<0-10>,"issues":[{"severity":"LOW|MEDIUM|HIGH|CRITICAL","sentence":"...","problem":"...","correction":"..."}]}'
     ),
     "consistency": (
         "You are a Scientific Consistency Auditor. Check internal consistency: do conclusions follow "
         "from results? Are terms defined consistently? Do figures match text? "
-        "Rate consistency 0-10. Respond in JSON:\n"
-        '{"score": <0-10>, "issues": [{"severity": "LOW|MEDIUM|HIGH|CRITICAL", '
-        '"sentence": "...", "problem": "...", "correction": "..."}]}'
+        "Rate consistency 0-10. List at most 3 issues. Respond ONLY in compact JSON (no extra text):\n"
+        '{"score":<0-10>,"issues":[{"severity":"LOW|MEDIUM|HIGH|CRITICAL","sentence":"...","problem":"...","correction":"..."}]}'
     ),
     "skeptic": (
         "You are a Scientific Skeptic. Challenge every major claim in the text. "
         "What could go wrong? What alternative explanations exist? What confounders are ignored? "
-        "Rate overall credibility 0-10. Respond in JSON:\n"
-        '{"score": <0-10>, "issues": [{"severity": "LOW|MEDIUM|HIGH|CRITICAL", '
-        '"sentence": "...", "problem": "...", "correction": "..."}]}'
+        "Rate overall credibility 0-10. List at most 3 issues. Respond ONLY in compact JSON (no extra text):\n"
+        '{"score":<0-10>,"issues":[{"severity":"LOW|MEDIUM|HIGH|CRITICAL","sentence":"...","problem":"...","correction":"..."}]}'
     ),
 }
 
 # ── LLM call ──────────────────────────────────────────────────────────────────
 
-def call_llm(system_prompt: str, user_text: str, max_new_tokens: int = 2048) -> str:
+def call_llm(system_prompt: str, user_text: str, max_new_tokens: int = 768) -> str:
     global tokenizer, model
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user",   "content": user_text[:4000]},  # safety truncation
+        {"role": "user",   "content": user_text[:2000]},
     ]
     ids = tokenizer.apply_chat_template(messages, return_tensors="pt", add_generation_prompt=True)
     if not isinstance(ids, torch.Tensor):
@@ -292,7 +286,13 @@ async def audit_generator(text: str) -> AsyncGenerator[str, None]:
         yield json.dumps({"event": "agent_start", "agent": aid, "name": agent["name"]})
         await asyncio.sleep(0)
 
-        raw = await asyncio.to_thread(call_llm, AGENT_PROMPTS[aid], text)
+        # Run LLM in thread; send keepalive pings every 10s to prevent tunnel timeout
+        loop = asyncio.get_event_loop()
+        future = loop.run_in_executor(None, call_llm, AGENT_PROMPTS[aid], text)
+        while not future.done():
+            yield ": keepalive"
+            await asyncio.sleep(10)
+        raw = await future
         parsed = parse_agent_response(raw)
         parsed["score"] = float(parsed.get("score", 5.0))
         results[aid] = parsed

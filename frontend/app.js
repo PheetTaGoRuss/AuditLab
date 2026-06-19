@@ -168,6 +168,7 @@ async function runAudit() {
       const lines = buffer.split("\n");
       buffer = lines.pop();
       for (const line of lines) {
+        if (line.startsWith(":")) continue;
         if (line.startsWith("data:")) {
           try {
             const data = JSON.parse(line.slice(5).trim());
