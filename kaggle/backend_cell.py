@@ -307,8 +307,23 @@ def start_tunnel():
             break
 
 
+def free_port(port: int):
+    """Kill any process currently listening on the given port."""
+    try:
+        result = subprocess.run(
+            ["fuser", "-k", f"{port}/tcp"], capture_output=True
+        )
+    except FileNotFoundError:
+        # fuser not available — try lsof fallback
+        r = subprocess.run(["lsof", "-ti", f":{port}"], capture_output=True, text=True)
+        pids = r.stdout.strip().split()
+        for pid in pids:
+            subprocess.run(["kill", "-9", pid])
+    time.sleep(1)
+
+
 def start():
-    # Start tunnel in background thread so it prints URL while uvicorn starts
+    free_port(8000)
     tunnel_thread = threading.Thread(target=start_tunnel, daemon=True)
     tunnel_thread.start()
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
