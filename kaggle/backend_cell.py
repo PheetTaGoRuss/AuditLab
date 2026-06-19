@@ -127,12 +127,32 @@ def call_llm(system_prompt: str, user_text: str, max_new_tokens: int = 1024) -> 
 
 def parse_agent_response(raw: str) -> dict:
     """Extract JSON from model output, falling back to a safe default."""
-    match = re.search(r"\{.*\}", raw, re.DOTALL)
-    if match:
+    # Print first 300 chars of raw output for debugging in Kaggle
+    print(f"[RAW] {raw[:300]!r}")
+
+    # Try all JSON-like substrings from largest to smallest
+    for match in sorted(re.finditer(r"\{.*?\}", raw, re.DOTALL),
+                        key=lambda m: len(m.group()), reverse=True):
         try:
-            return json.loads(match.group())
+            data = json.loads(match.group())
+            if isinstance(data, dict):
+                # Safely parse score — handle "7", "7.5", "7/10", None, etc.
+                raw_score = data.get("score", 5.0)
+                try:
+                    score = float(str(raw_score).split("/")[0].strip())
+                except (ValueError, TypeError):
+                    score = 5.0
+                # Score 0 with no issues = parsing artifact; use neutral default
+                issues = data.get("issues", [])
+                if score == 0 and not issues:
+                    score = 5.0
+                data["score"] = max(0.5, min(10.0, score))
+                data["issues"] = issues
+                return data
         except json.JSONDecodeError:
-            pass
+            continue
+
+    print("[WARN] No valid JSON found in model output, using default.")
     return {"score": 5.0, "issues": []}
 
 # ── Scoring & game theory ──────────────────────────────────────────────────────
