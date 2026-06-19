@@ -88,25 +88,53 @@ articleText.addEventListener("input", () => {
   charCount.textContent = `${articleText.value.length.toLocaleString()} characters`;
 });
 
-// ── File upload ───────────────────────────────────────────────────────────────
-function loadFile(file) {
-  if (!file) return;
-  fileNameEl.textContent = file.name;
-  const reader = new FileReader();
-  reader.onload = e => {
-    articleText.value = e.target.result;
-    charCount.textContent = `${e.target.result.length.toLocaleString()} characters`;
-    document.querySelector('[data-tab="text"]').click();
-  };
-  reader.readAsText(file);
+// ── PDF text extraction via PDF.js ────────────────────────────────────────────
+async function extractPdfText(file) {
+  const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  if (typeof pdfjsLib === "undefined") throw new Error("PDF.js not loaded");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const parts = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    parts.push(content.items.map(item => item.str).join(" "));
+  }
+  return parts.join("\n");
 }
-fileInput.addEventListener("change", e => loadFile(e.target.files[0]));
+
+// ── File upload ───────────────────────────────────────────────────────────────
+async function loadFile(file) {
+  if (!file) return;
+  fileNameEl.textContent = `Loading ${file.name}…`;
+
+  let text;
+  if (file.name.toLowerCase().endsWith(".pdf")) {
+    try {
+      fileNameEl.textContent = `Extracting text from ${file.name}…`;
+      text = await extractPdfText(file);
+    } catch (err) {
+      fileNameEl.textContent = `Error: ${err.message}`;
+      return;
+    }
+  } else {
+    text = await file.text();
+  }
+
+  articleText.value = text;
+  charCount.textContent = `${text.length.toLocaleString()} characters`;
+  fileNameEl.textContent = `${file.name} — ${text.length.toLocaleString()} chars extracted`;
+  document.querySelector('[data-tab="text"]').click();
+}
+fileInput.addEventListener("change", e => loadFile(e.target.files[0]).catch(console.error));
 dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
 dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
 dropZone.addEventListener("drop", e => {
   e.preventDefault();
   dropZone.classList.remove("drag-over");
-  loadFile(e.dataTransfer.files[0]);
+  loadFile(e.dataTransfer.files[0]).catch(console.error);
 });
 
 // ── Build agent progress rows ─────────────────────────────────────────────────

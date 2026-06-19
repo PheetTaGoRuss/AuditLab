@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AuditLab — AI Scientific Audit</title>
   <link rel="stylesheet" href="style.css" />
+  <!-- PDF.js for client-side PDF text extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
   <header>
@@ -42,10 +44,10 @@
       </div>
       <div id="tab-file" class="tab-panel">
         <div class="drop-zone" id="dropZone">
-          <span>Drag & drop a .txt file here, or</span>
+          <span>Drag & drop a <strong>PDF</strong>, .txt, or .md file here, or</span>
           <label class="btn-ghost file-label">
             Browse
-            <input type="file" id="fileInput" accept=".txt,.md" hidden />
+            <input type="file" id="fileInput" accept=".pdf,.txt,.md" hidden />
           </label>
         </div>
         <p id="fileName" class="hint"></p>
