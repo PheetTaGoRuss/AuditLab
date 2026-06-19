@@ -102,7 +102,7 @@ AGENT_PROMPTS = {
 
 # ── LLM call ──────────────────────────────────────────────────────────────────
 
-def call_llm(system_prompt: str, user_text: str, max_new_tokens: int = 1024) -> str:
+def call_llm(system_prompt: str, user_text: str, max_new_tokens: int = 2048) -> str:
     global tokenizer, model
     messages = [
         {"role": "system", "content": system_prompt},
@@ -125,34 +125,43 @@ def call_llm(system_prompt: str, user_text: str, max_new_tokens: int = 1024) -> 
     return decoded.strip()
 
 
-def parse_agent_response(raw: str) -> dict:
-    """Extract JSON from model output, falling back to a safe default."""
-    # Print first 300 chars of raw output for debugging in Kaggle
-    print(f"[RAW] {raw[:300]!r}")
+def _safe_score(raw_score) -> float:
+    try:
+        return float(str(raw_score).split("/")[0].strip())
+    except (ValueError, TypeError):
+        return 5.0
 
-    # Try all JSON-like substrings from largest to smallest
-    for match in sorted(re.finditer(r"\{.*?\}", raw, re.DOTALL),
-                        key=lambda m: len(m.group()), reverse=True):
+
+def parse_agent_response(raw: str) -> dict:
+    """Extract JSON from model output with truncation recovery."""
+    # Greedy match: first { to last }
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if match:
         try:
             data = json.loads(match.group())
-            if isinstance(data, dict):
-                # Safely parse score — handle "7", "7.5", "7/10", None, etc.
-                raw_score = data.get("score", 5.0)
-                try:
-                    score = float(str(raw_score).split("/")[0].strip())
-                except (ValueError, TypeError):
-                    score = 5.0
-                # Score 0 with no issues = parsing artifact; use neutral default
-                issues = data.get("issues", [])
-                if score == 0 and not issues:
-                    score = 5.0
-                data["score"] = max(0.5, min(10.0, score))
-                data["issues"] = issues
-                return data
+            score = _safe_score(data.get("score", 5.0))
+            issues = data.get("issues", [])
+            data["score"] = max(0.5, min(10.0, score))
+            data["issues"] = issues
+            return data
         except json.JSONDecodeError:
-            continue
+            pass
 
-    print("[WARN] No valid JSON found in model output, using default.")
+    # Recovery: model output was truncated — extract score and partial issues
+    score_m = re.search(r'"score"\s*:\s*([0-9.]+)', raw)
+    score = _safe_score(score_m.group(1)) if score_m else 5.0
+
+    # Collect any complete issue objects {"severity":..., "sentence":..., ...}
+    issues = []
+    for m in re.finditer(r'\{"severity"\s*:.*?"correction"\s*:\s*"[^"]*"\s*\}', raw, re.DOTALL):
+        try:
+            issues.append(json.loads(m.group()))
+        except json.JSONDecodeError:
+            pass
+
+    if score_m or issues:
+        return {"score": max(0.5, min(10.0, score)), "issues": issues}
+
     return {"score": 5.0, "issues": []}
 
 # ── Scoring & game theory ──────────────────────────────────────────────────────
