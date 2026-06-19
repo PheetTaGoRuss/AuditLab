@@ -26,15 +26,15 @@ from sse_starlette.sse import EventSourceResponse
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # ── Model loading ──────────────────────────────────────────────────────────────
-# Uses `model` / `tokenizer` from a prior cell if they exist, otherwise loads.
 MODEL_ID = "scb10x/llama3.1-typhoon2-8b-instruct"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-try:
-    tokenizer  # noqa: F821
-    model      # noqa: F821
+_g = globals()
+if isinstance(_g.get("tokenizer"), AutoTokenizer) and _g.get("model") is not None:
+    tokenizer = _g["tokenizer"]
+    model     = _g["model"]
     print("Using model already loaded in memory.")
-except NameError:
+else:
     print(f"Loading {MODEL_ID} on {DEVICE} ...")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
     model = AutoModelForCausalLM.from_pretrained(
@@ -102,6 +102,7 @@ AGENT_PROMPTS = {
 # ── LLM call ──────────────────────────────────────────────────────────────────
 
 def call_llm(system_prompt: str, user_text: str, max_new_tokens: int = 1024) -> str:
+    global tokenizer, model
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user",   "content": user_text[:4000]},  # safety truncation
